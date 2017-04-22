@@ -1,10 +1,11 @@
 package edu.iu.uits.selfregistry;
 
+import jdk.nashorn.api.scripting.JSObject;
+import org.apache.commons.validator.routines.EmailValidator;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
@@ -13,13 +14,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
-import org.apache.commons.validator.routines.EmailValidator;
 
+import javax.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.UnknownHostException;
+import java.util.Arrays;
 import java.util.Enumeration;
-import java.util.IllegalFormatException;
 
 /**
  * Created by naveenjetty on 4/6/17.
@@ -29,6 +30,8 @@ import java.util.IllegalFormatException;
 @ComponentScan
 @EnableConfigurationProperties(SelfRegistryProperties.class)
 public class SelfRegistryAutoConfiguration {
+    private String location;
+    private String curUrl;
 
     @Autowired
     private SelfRegistryProperties properties;
@@ -61,8 +64,9 @@ public class SelfRegistryAutoConfiguration {
             }
             // Get the url where this service is present.
             InetAddress inetAddress = getLocalHostLANAddress();
-            String url = "http://"+inetAddress.getHostName()+":8080";
+            String url = "http://"+inetAddress.getHostAddress()+":8080";
             System.out.println("Service is running on "+url);
+            curUrl = url;
 
 
             // Check if the service is already registered.
@@ -77,6 +81,7 @@ public class SelfRegistryAutoConfiguration {
                 JSONObject obj = new JSONObject(serviceResponseEntity.getBody().toString());
                 String link = obj.getJSONObject("_links").getJSONObject("microServiceEntity").getString("href");
                 System.out.println("Self Link: "+ link);
+                location = link;
                 // Link: will be used to patch/update operation to update the url
                 // This code will be done after making the url an array instead of a field in the backend.
 
@@ -87,6 +92,28 @@ public class SelfRegistryAutoConfiguration {
                 if (!obj.getString("description").equals(description)
                         || !obj.getString("email").equals(email) ){
                     throw new IllegalArgumentException("Duplicate Title is not allowed, another service already exists");
+                } else {
+                    // Check if the url is already present in the list of URL's retrieved from the catalog.
+                    // If present, do nothing
+                    // Else add the current url to the list and update it.
+                    JSONArray urls = obj.getJSONArray("url");
+                    boolean isUrlPresent = urls.toString().contains(url);
+                    if (isUrlPresent) System.out.println("URL is already found");
+                    else {
+                        System.out.println("URL is not present in the list");
+                        urls.put(url);
+                        service.getUrl().add(url);
+                        System.out.println(service.toString());
+                        System.out.println(obj.getJSONArray("url").toString());
+                        try {
+                            //ResponseEntity<String> response = restTemplate.postForEntity(link, obj.toString(), String.class);
+                            //System.out.println(response.toString());
+                            restTemplate.put(link, service);
+                        } catch(HttpClientErrorException he){
+                            System.out.println(he.getResponseBodyAsString());
+                        }
+                    }
+
                 }
 
             } catch (HttpClientErrorException ex){
@@ -98,19 +125,33 @@ public class SelfRegistryAutoConfiguration {
                         .title(title)
                         .description(description)
                         .email(email)
-                        .url(url).build();
+                        .url(Arrays.asList(url)).build();
                 System.out.println(data.toString());
                 try {
-                    ResponseEntity<MicroService> response = restTemplate.postForEntity(
-                            "http://ms-catalog.herokuapp.com/catalog", data, MicroService.class);
+                    ResponseEntity<String> response = restTemplate.postForEntity(
+                            "http://ms-catalog.herokuapp.com/catalog", data, String.class);
                     System.out.println("Posted a new service with the following response");
-                    System.out.println(response.toString());
+                    //System.out.println(response.toString());
+                    System.out.println(response.getBody());
+                    JSONObject obj = new JSONObject(response.getBody().toString());
+                    String link = obj.getJSONObject("_links").getJSONObject("microServiceEntity").getString("href");
+                    System.out.println("Self Link: "+ link);
+                    location = link;
                 } catch (HttpClientErrorException e){
                     System.out.println("Failed with following erros");
-                    e.printStackTrace();
+                    //e.printStackTrace();
+                    System.out.println(e.getResponseBodyAsString());
                 }
             }
         };
+    }
+
+    @PreDestroy
+    public void destroy(RestTemplate restTemplate){
+        // Need to figure out why it is not running while the program is exiting.
+        System.out.println("Destroy is executed");
+        System.out.println(location+" Will be updated to remove the url or entry itself");
+
     }
 
     private static InetAddress getLocalHostLANAddress() throws UnknownHostException {

@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.ToString;
 
+import java.util.List;
+
 /**
  * Created by naveenjetty on 4/6/17.
  */
@@ -17,6 +19,6 @@ import lombok.ToString;
 public class MicroService {
     private String title;
     private String description;
-    private String url;
+    private List<String> url;
     private String email;
 }

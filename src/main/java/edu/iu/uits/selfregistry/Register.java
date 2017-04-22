@@ -5,10 +5,9 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.context.annotation.Bean;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
+
+import java.net.*;
+import java.util.Enumeration;
 
 import static jdk.nashorn.internal.runtime.regexp.joni.Config.log;
 
@@ -18,8 +17,18 @@ import static jdk.nashorn.internal.runtime.regexp.joni.Config.log;
 
 //@SpringBootApplication
 public class Register {
-    public static void main(String args[]) {
-        SpringApplication.run(Register.class);
+    public static void main(String[] args) throws Exception{
+//        SpringApplication.run(Register.class);
+        System.setProperty("java.net.preferIPv4Stack" , "false");
+        System.setProperty("java.net.preferIPv6Addresses" , "true");
+        InetAddress ip = InetAddress.getLocalHost();
+        String url=null;
+        String port = "8080";
+        if (ip instanceof Inet6Address)
+            url = "http://["+ip.getHostAddress()+"]:"+port;
+        else if (ip instanceof Inet4Address)
+            url = "http://"+ip.getHostAddress()+":"+port;
+        System.out.println(url);
     }
 
     //@Bean
@@ -28,7 +37,7 @@ public class Register {
 //    }
 
    // @Bean
-    public CommandLineRunner run(RestTemplate restTemplate) throws Exception {
+    /*public CommandLineRunner run(RestTemplate restTemplate) throws Exception {
         return args -> {
             String title = "test 12345Z";
             String description = "description from self registry";
@@ -67,5 +76,5 @@ public class Register {
             }
 
         };
-    }
+    }*/
 }
