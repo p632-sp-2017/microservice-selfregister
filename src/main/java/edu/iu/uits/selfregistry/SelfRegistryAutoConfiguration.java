@@ -1,10 +1,9 @@
 package edu.iu.uits.selfregistry;
 
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.UnknownHostException;
+import java.net.*;
 import java.util.Arrays;
 import java.util.Enumeration;
+import java.util.List;
 
 import javax.annotation.PreDestroy;
 
@@ -33,6 +32,8 @@ import org.springframework.web.client.RestTemplate;
 public class SelfRegistryAutoConfiguration {
 	private String location;
 	private String curUrl;
+	private List<String> urlList;
+	private MicroService service;
 	private static Logger logger = Logger.getLogger(SelfRegistryAutoConfiguration.class);
 	@Autowired
 	private SelfRegistryProperties properties;
@@ -65,8 +66,15 @@ public class SelfRegistryAutoConfiguration {
 				throw new IllegalArgumentException("Invalid E-Mail format");
 			}
 			// Get the url where this service is present.
-			InetAddress inetAddress = getLocalHostLANAddress();
-			String url = "http://" + inetAddress.getHostAddress() + ":8080";
+			System.setProperty("java.net.preferIPv4Stack" , "false");
+			System.setProperty("java.net.preferIPv6Addresses" , "true");
+			InetAddress ip = InetAddress.getLocalHost();
+			String url=null;
+			String port = "8080";
+			if (ip instanceof Inet6Address)
+				url = "http://["+ip.getHostAddress()+"]:"+port;
+			else if (ip instanceof Inet4Address)
+				url = "http://"+ip.getHostAddress()+":"+port;
 			logger.info("Service is running on " + url);
 			curUrl = url;
 
@@ -76,6 +84,7 @@ public class SelfRegistryAutoConfiguration {
 						"http://ms-catalog.herokuapp.com/catalog/search/findByTitle?title=" + title,
 						MicroService.class);
 				logger.info(service.toString());
+				this.service = service;
 				ResponseEntity<String> serviceResponseEntity = restTemplate.getForEntity(
 						"http://ms-catalog.herokuapp.com/catalog/search/findByTitle?title=" + title, String.class);
 				logger.info("Response Entity Output");
@@ -133,6 +142,7 @@ public class SelfRegistryAutoConfiguration {
 				// It is not registered with the title name, register now.
 				MicroService data = MicroService.builder().title(title).description(description).email(email)
 						.url(Arrays.asList(url)).build();
+				this.service = data;
 				logger.info(data.toString());
 				try {
 					ResponseEntity<String> response = restTemplate
@@ -154,66 +164,20 @@ public class SelfRegistryAutoConfiguration {
 	}
 
 	@PreDestroy
-	public void destroy(RestTemplate restTemplate) {
+	public void destroy() {
 		// Need to figure out why it is not running while the program is
-		// exiting.
+		// exiting with stop but working with restart.
 		logger.info("Destroy is executed");
 		logger.info(location + " Will be updated to remove the url or entry itself");
-
-	}
-
-	private static InetAddress getLocalHostLANAddress() throws UnknownHostException {
+		RestTemplate restTemplate = new RestTemplateBuilder().build();
+		while(urlList.remove(curUrl)){}
+		service.setUrl(urlList);
 		try {
-			InetAddress candidateAddress = null;
-			// Iterate all NICs (network interface cards)...
-			for (Enumeration ifaces = NetworkInterface.getNetworkInterfaces(); ifaces.hasMoreElements();) {
-				NetworkInterface iface = (NetworkInterface) ifaces.nextElement();
-				// Iterate all IP addresses assigned to each card...
-				for (Enumeration inetAddrs = iface.getInetAddresses(); inetAddrs.hasMoreElements();) {
-					InetAddress inetAddr = (InetAddress) inetAddrs.nextElement();
-					if (!inetAddr.isLoopbackAddress()) {
-
-						if (inetAddr.isSiteLocalAddress()) {
-							// Found non-loopback site-local address. Return it
-							// immediately...
-							return inetAddr;
-						} else if (candidateAddress == null) {
-							// Found non-loopback address, but not necessarily
-							// site-local.
-							// Store it as a candidate to be returned if
-							// site-local address is not subsequently found...
-							candidateAddress = inetAddr;
-							// Note that we don't repeatedly assign non-loopback
-							// non-site-local addresses as candidates,
-							// only the first. For subsequent iterations,
-							// candidate will be non-null.
-						}
-					}
-				}
-			}
-			if (candidateAddress != null) {
-				// We did not find a site-local address, but we found some other
-				// non-loopback address.
-				// Server might have a non-site-local address assigned to its
-				// NIC (or it might be running
-				// IPv6 which deprecates the "site-local" concept).
-				// Return this non-loopback candidate address...
-				return candidateAddress;
-			}
-			// At this point, we did not find a non-loopback address.
-			// Fall back to returning whatever InetAddress.getLocalHost()
-			// returns...
-			InetAddress jdkSuppliedAddress = InetAddress.getLocalHost();
-			if (jdkSuppliedAddress == null) {
-				throw new UnknownHostException("The JDK InetAddress.getLocalHost() method unexpectedly returned null.");
-			}
-			return jdkSuppliedAddress;
-		} catch (Exception e) {
-			UnknownHostException unknownHostException = new UnknownHostException(
-					"Failed to determine LAN address: " + e);
-			unknownHostException.initCause(e);
-			throw unknownHostException;
+			restTemplate.put(this.location, this.service);
+		} catch (HttpClientErrorException he) {
+			logger.info(he.getResponseBodyAsString());
 		}
+
 	}
 
 }
