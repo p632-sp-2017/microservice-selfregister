@@ -170,6 +170,7 @@ public class SelfRegistryAutoConfiguration {
 		logger.info("Destroy is executed");
 		logger.info(location + " Will be updated to remove the url or entry itself");
 		RestTemplate restTemplate = new RestTemplateBuilder().build();
+		urlList = service.getUrl();
 		while(urlList.remove(curUrl)){}
 		logger.info("Current list of URLs:"+curUrl.toString());
 		if (curUrl==null || curUrl.length()==0 ){
