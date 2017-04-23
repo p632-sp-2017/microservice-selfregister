@@ -171,13 +171,28 @@ public class SelfRegistryAutoConfiguration {
 		logger.info(location + " Will be updated to remove the url or entry itself");
 		RestTemplate restTemplate = new RestTemplateBuilder().build();
 		while(urlList.remove(curUrl)){}
-		service.setUrl(urlList);
-		try {
-			restTemplate.put(this.location, this.service);
-		} catch (HttpClientErrorException he) {
-			logger.info(he.getResponseBodyAsString());
+		logger.info("Current list of URLs:"+curUrl.toString());
+		if (curUrl==null || curUrl.length()==0 ){
+			// Perform the delete operation on the link.
+			logger.info("This is the last instance, removing the entry from the catalog");
+			try {
+				restTemplate.delete(this.location);
+				logger.info("Removing the entry... Successful");
+			} catch (HttpClientErrorException he){
+				logger.error("Removing the entry... Error encountered");
+				logger.error(he.getResponseBodyAsString());
+			}
+		} else {
+			service.setUrl(urlList);
+			logger.info(curUrl+ " will be removed from the entry in the catalog");
+			try {
+				restTemplate.put(this.location, this.service);
+				logger.info("Updating the catalog entry... successful");
+			} catch (HttpClientErrorException he) {
+				logger.error("Updating the catalog entry... Error encountered");
+				logger.error(he.getResponseBodyAsString());
+			}
 		}
-
 	}
 
 }
