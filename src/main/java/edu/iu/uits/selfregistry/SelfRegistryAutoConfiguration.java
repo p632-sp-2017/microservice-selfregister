@@ -8,7 +8,9 @@ import java.util.List;
 import javax.annotation.PreDestroy;
 
 import org.apache.commons.validator.routines.EmailValidator;
-import org.apache.log4j.Logger;
+//import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +37,8 @@ public class SelfRegistryAutoConfiguration {
 	private String curUrl;
 	private List<String> urlList;
 	private MicroService service;
-	private static Logger logger = Logger.getLogger(SelfRegistryAutoConfiguration.class);
+	//private static Logger logger = Logger.getLogger(SelfRegistryAutoConfiguration.class);
+	private static final Logger logger = LoggerFactory.getLogger(SelfRegistryAutoConfiguration.class);
 
 	@Value("${server.port}")
 	private String port;
@@ -143,7 +146,7 @@ public class SelfRegistryAutoConfiguration {
 				}
 
 			} catch (HttpClientErrorException ex) {
-				logger.info(ex.getStatusCode());
+				logger.info(String.valueOf(ex.getStatusCode()));
 				logger.info("Did not find the service by the title: " + title);
 				logger.info("Attempting to post a new record for the service");
 				// It is not registered with the title name, register now.
@@ -172,34 +175,46 @@ public class SelfRegistryAutoConfiguration {
 
 	@PreDestroy
 	public void destroy() {
-		// Need to figure out why it is not running while the program is
-		// exiting with stop but working with restart.
-		logger.info("Destroy is executed");
-		logger.info(location + " Will be updated to remove the url or entry itself");
+		//Make a get request again, to refresh the list of urls
 		RestTemplate restTemplate = new RestTemplateBuilder().build();
-		urlList = service.getUrl();
-		while(urlList.remove(curUrl)){}
-		logger.info("Current list of URLs:"+curUrl.toString());
-		if (curUrl==null || curUrl.length()==0 ){
-			// Perform the delete operation on the link.
-			logger.info("This is the last instance, removing the entry from the catalog");
-			try {
-				restTemplate.delete(this.location);
-				logger.info("Removing the entry... Successful");
-			} catch (HttpClientErrorException he){
-				logger.error("Removing the entry... Error encountered");
-				logger.error(he.getResponseBodyAsString());
+
+		try {
+			MicroService service = restTemplate.getForObject(
+					this.location,
+					MicroService.class);
+			logger.info(service.toString());
+
+			logger.info("Destroy is executed");
+			logger.info(location + " Will be updated to remove the url or entry itself");
+
+			urlList = service.getUrl();
+			while (urlList.remove(curUrl)) {
 			}
-		} else {
-			service.setUrl(urlList);
-			logger.info(curUrl+ " will be removed from the entry in the catalog");
-			try {
-				restTemplate.put(this.location, this.service);
-				logger.info("Updating the catalog entry... successful");
-			} catch (HttpClientErrorException he) {
-				logger.error("Updating the catalog entry... Error encountered");
-				logger.error(he.getResponseBodyAsString());
+			logger.info("Current list of URLs:" + urlList.toString());
+			if (curUrl == null || curUrl.length() == 0) {
+				// Perform the delete operation on the link.
+				logger.info("This is the last instance, removing the entry from the catalog");
+				try {
+					restTemplate.delete(this.location);
+					logger.info("Removing the entry... Successful");
+				} catch (HttpClientErrorException he) {
+					logger.error("Removing the entry... Error encountered");
+					logger.error(he.getResponseBodyAsString());
+				}
+			} else {
+				service.setUrl(urlList);
+				logger.info(curUrl + " will be removed from the entry in the catalog");
+				try {
+					restTemplate.put(this.location, service);
+					logger.info("Updating the catalog entry... successful");
+				} catch (HttpClientErrorException he) {
+					logger.error("Updating the catalog entry... Error encountered");
+					logger.error(he.getResponseBodyAsString());
+				}
 			}
+		} catch (HttpClientErrorException e){
+			logger.error("Something went wrong with refreshing the list");
+			logger.error(e.getResponseBodyAsString());
 		}
 	}
 
