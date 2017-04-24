@@ -12,6 +12,7 @@ import org.apache.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -35,6 +36,10 @@ public class SelfRegistryAutoConfiguration {
 	private List<String> urlList;
 	private MicroService service;
 	private static Logger logger = Logger.getLogger(SelfRegistryAutoConfiguration.class);
+
+	@Value("${server.port}")
+	private String port;
+
 	@Autowired
 	private SelfRegistryProperties properties;
 
@@ -70,7 +75,9 @@ public class SelfRegistryAutoConfiguration {
 			System.setProperty("java.net.preferIPv6Addresses" , "true");
 			InetAddress ip = InetAddress.getLocalHost();
 			String url=null;
-			String port = "8080";
+			if (this.port == null){
+				this.port = "8080";
+			}
 			if (ip instanceof Inet6Address)
 				url = "http://["+ip.getHostAddress()+"]:"+port;
 			else if (ip instanceof Inet4Address)
